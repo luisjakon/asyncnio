@@ -10,15 +10,15 @@ public class Defaults {
 
     public static AsyncChannelProvider defaultProvider() {
         if (DEFAULT_PROVIDER == null) {
-            DEFAULT_PROVIDER = AsyncChannelProvider.DEFAULT_PROVIDER;
+            DEFAULT_PROVIDER = new AsyncChannelProvider();
         }
         return DEFAULT_PROVIDER;
     }
 
     public static synchronized AsyncChannelGroup defaultGroup() throws IOException {
         if (DEFAULT_GROUP == null) {
-            DEFAULT_GROUP = new AsyncChannelGroup(Defaults.defaultProvider(), Defaults.defaultNotifierService(),
-                    Defaults.defaultNotifierThreads(), Defaults.defaultDispatchers());
+            DEFAULT_GROUP = new AsyncChannelGroup(defaultProvider(), defaultNotifierService(),
+                    defaultNotifierThreads(), defaultDispatchers());
             DEFAULT_GROUP.isSystemGroup = true;
 
             Defaults.addShutdownHook();  // <= IMPORTANT: do not remove unless you know what you're doing

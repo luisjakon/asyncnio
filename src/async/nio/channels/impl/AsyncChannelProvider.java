@@ -44,8 +44,6 @@ public class AsyncChannelProvider extends AsynchronousChannelProvider {
         return (AsyncChannelGroup) group;
     }
 
-    protected static final AsyncChannelProvider DEFAULT_PROVIDER = new AsyncChannelProvider();
-
-    private AsyncChannelProvider() {
+    protected AsyncChannelProvider() {
     } // Singleton
 }
