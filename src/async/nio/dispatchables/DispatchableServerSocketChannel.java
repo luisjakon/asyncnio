@@ -7,12 +7,12 @@ import async.nio.channels.Exceptions.AcceptPendingException;
 import async.nio.channels.impl.AsyncChannelGroup;
 import async.nio.channels.impl.AsyncSocketChannel;
 import async.nio.channels.impl.Defaults;
-import async.nio.channels.impl.Events.State;
-import async.nio.channels.impl.Futures.FutureCompletionHandler;
+import async.nio.channels.system.Events.State;
+import async.nio.channels.system.Futures.FutureCompletionHandler;
 import async.nio.dispatchables.DispatchableChannelEvents.PendingAcceptEvent;
 import async.nio.dispatchables.DispatchableChannels.DispatchableServerChannel;
 import async.nio.dispatchables.DispatchableChannels.InterestOps;
-import async.nio.dispatchers.Dispatchers.ServerChannelDispatcher;
+import async.nio.dispatchers.ServerChannelDispatcher;
 import async.nio.net.SocketOption;
 import async.nio.net.SocketOptions;
 import async.nio.net.StandardSocketOptions;
@@ -33,17 +33,18 @@ import java.util.concurrent.Future;
 
 public class DispatchableServerSocketChannel implements DispatchableServerChannel, NetworkChannel {
 
-    public static final int DISPATCHERS = 10;
     protected static final Logger LOG = Logger.getLogger(DispatchableServerSocketChannel.class);// .setDebug(true);
-
     protected final ServerSocketChannel schannel;
-    protected final AsyncChannelGroup group;
 
-    protected Dispatchers<ServerChannelDispatcher> dispatchers;
-    protected PendingAcceptEvent<AsynchronousSocketChannel> accept;
+    protected final AsyncChannelGroup group;
+    protected final ServerChannelDispatchers dispatchers;
+
+    protected final PendingAcceptEvent accept;
 
     protected volatile int interests;
     protected volatile Boolean shutdown = false;
+
+    protected static int DISPATCHERS = 10;
 
     public DispatchableServerSocketChannel(AsyncChannelGroup group, ServerSocketChannel sc) throws IOException {
         if (sc == null) {
@@ -56,7 +57,7 @@ public class DispatchableServerSocketChannel implements DispatchableServerChanne
         this.schannel.configureBlocking(false);
         this.schannel.socket().setReuseAddress(true);
 
-        this.dispatchers = new Dispatchers<ServerChannelDispatcher>(DISPATCHERS);
+        this.dispatchers = new ServerChannelDispatchers<ServerChannelDispatcher>(DISPATCHERS);
         this.accept = new PendingAcceptEvent<AsynchronousSocketChannel>() {
         };
     }
@@ -68,7 +69,6 @@ public class DispatchableServerSocketChannel implements DispatchableServerChanne
     protected boolean isAcceptPending() {
         return accept.isPending();
     }
-
 
     @Override
     public SelectableChannel getSelectableChannel() {
@@ -221,12 +221,12 @@ public class DispatchableServerSocketChannel implements DispatchableServerChanne
     });
 
     /**
-     * Server Dispatchers Helper Class
+     * Dispatcher Service Helper Class
      */
-    private class Dispatchers<T extends ServerChannelDispatcher> {
+    private class ServerChannelDispatchers<T extends ServerChannelDispatcher> {
         CircularList<T> dispatchers;
 
-        public Dispatchers(int size) {
+        public ServerChannelDispatchers(int size) {
             dispatchers = new CircularList<T>(size);
         }
 
