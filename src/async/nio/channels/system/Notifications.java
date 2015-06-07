@@ -5,12 +5,18 @@ import async.nio.channels.Exceptions.InterruptedByTimeoutException;
 import async.nio.channels.system.Events.PendingEvent;
 import async.nio.channels.system.Events.State;
 
+import java.util.concurrent.ExecutorService;
+
 public class Notifications {
 
-    public static <V, A> Runnable create(final PendingEvent<V> event, final A attachment, final CompletionHandler<V, A> handler) {
+    public static <V, A> void send(ExecutorService notifier, PendingEvent<V> event, A attachment, CompletionHandler<V, A> handler) {
+        notifier.execute(handler(event, attachment, handler));
+    }
+
+    private static <V, A> Runnable handler(final PendingEvent<V> event, final A attachment, final CompletionHandler<V, A> handler) {
         return new Runnable() {
             public void run() {
-                Notifications.handle(event, attachment, handler);
+                handle(event, attachment, handler);
             }
         };
     }

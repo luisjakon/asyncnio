@@ -81,12 +81,12 @@ public class AsyncChannelGroup extends AsynchronousChannelGroup {
 
     public void notify(PendingChannelEvent event, Object res) {
         event.set(res);
-        notifier.execute(Notifications.create(event, event.attachment, event.handler));
+        Notifications.send(notifier, event, event.attachment, event.handler);
     }
 
     public void notifyError(PendingChannelEvent event, Throwable err) {
         event.setException(err);
-        notifier.execute(Notifications.create(event, event.attachment, event.handler));
+        Notifications.send(notifier, event, event.attachment, event.handler);
     }
 
     @Override
