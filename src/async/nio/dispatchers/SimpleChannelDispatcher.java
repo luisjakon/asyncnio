@@ -2,7 +2,6 @@ package async.nio.dispatchers;
 
 import async.nio.dispatchables.DispatchableChannels.Dispatchable;
 import async.nio.dispatchables.DispatchableChannels.InterestOps;
-import async.nio.dispatchers.Dispatchers.ChannelDispatcher;
 import async.nio.util.Logger;
 import async.nio.util.Selectors;
 
@@ -11,7 +10,6 @@ import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.nio.channels.spi.SelectorProvider;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
@@ -20,27 +18,23 @@ import java.util.concurrent.LinkedBlockingQueue;
 public abstract class SimpleChannelDispatcher<T extends Dispatchable> implements Runnable, ChannelDispatcher<T> {
     protected final Logger LOG = Logger.getLogger(getClass());// .setDebug(true);
 
-    public static int MIN_SPINS = 20;
-    public static int MAX_SPINS = 512;
-    public static long MAX_DELTA_NS = 53416;// 104858;//262144;//524288;
-    public static long DEFAULT_TIMEOUT = 500; // in millis
-    public static long[] TIMEOUTS = {30, 50, 100, 250, 500};// ,1000, 2000, 4000, 10000, 150000};
-
-    private static final Dispatchable[] DISPATCHABLE_ARRAY = new Dispatchable[0];
-
     private String name;
-    private final Queue<T> channels;
+
+    private final Queue<T> open_channels;
     private final BlockingQueue<T> closed_channels;
+
     private Selector selector;
-    private long timeout = DEFAULT_TIMEOUT;
+
+    private long timeout;
     private volatile boolean shutdown;
 
     protected SimpleChannelDispatcher(String name) {
-        this.name = name;
         try {
-            selector = Selector.open();
-            channels = new LinkedList<T>();
-            closed_channels = new LinkedBlockingQueue<T>();
+            this.name = name;
+            this.timeout = Defaults.DEFAULT_TIMEOUT;
+            this.selector = Selector.open();
+            this.open_channels = new LinkedList<T>();
+            this.closed_channels = new LinkedBlockingQueue<T>();
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -50,24 +44,16 @@ public abstract class SimpleChannelDispatcher<T extends Dispatchable> implements
         return name;
     }
 
-    public boolean isOpen() {
-        return !shutdown;
-    }
-
-    public SelectorProvider selectorProvider() {
-        return selector.provider();
-    }
-
     public boolean registerInterestFor(T channel) {
         if (shutdown)
             return false;
 
         try {
-            synchronized (channels) {
-                if (channels.contains(channel)) {
+            synchronized (open_channels) {
+                if (open_channels.contains(channel)) {
                     return true;
                 }
-                return channels.add(channel);
+                return open_channels.add(channel);
             }
         } finally {
             // LOG.debug("Waking up selector: " + channel.interestOps());
@@ -91,7 +77,7 @@ public abstract class SimpleChannelDispatcher<T extends Dispatchable> implements
         while (!shutdown) {
             try {
 
-                // Process closed channels
+                // Process closed open_channels
                 this.processClosedChannels();
 
                 // Register new requests
@@ -114,11 +100,11 @@ public abstract class SimpleChannelDispatcher<T extends Dispatchable> implements
                 }
 
                 // Selector in good behavior. Reset Selector spin detection checks.
-                if (spinDetect && spinLoops >= MAX_SPINS) {
+                if (spinDetect && spinLoops >= Defaults.MAX_SPINS) {
                     spinLoops = 0;
                 }
 
-                // Process I/O requests on selected channels
+                // Process I/O requests on selected open_channels
                 this.processSelectedKeys();
 
             } catch (ClosedSelectorException e) {
@@ -148,12 +134,12 @@ public abstract class SimpleChannelDispatcher<T extends Dispatchable> implements
 
     private void processRegisteredOps() {
         T[] clones;
-        synchronized (channels) {
-            if (channels.size() == 0)
+        synchronized (open_channels) {
+            if (open_channels.size() == 0)
                 return;
 
-            clones = (T[]) channels.toArray(DISPATCHABLE_ARRAY);
-            channels.clear();
+            clones = (T[]) open_channels.toArray(Defaults.DISPATCHABLE_ARRAY);
+            open_channels.clear();
         }
         for (T channel : clones) {
             registerOps(channel, channel.interestOps());
@@ -205,7 +191,7 @@ public abstract class SimpleChannelDispatcher<T extends Dispatchable> implements
     private boolean detectSpin(long lastTime, int loops) {
         long delta = System.nanoTime() - lastTime;
 
-        if (loops > MAX_SPINS && delta < MAX_DELTA_NS) {
+        if (loops > Defaults.MAX_SPINS && delta < Defaults.MAX_DELTA_NS) {
             LOG.warning(selector + " spin detected [Loops: " + loops + ", Time diff: " + delta + "]");
             return true;
         }
@@ -226,7 +212,7 @@ public abstract class SimpleChannelDispatcher<T extends Dispatchable> implements
 
     private void cleanup() {
         synchronized (this) {
-            closeChannels(channels);
+            closeChannels(open_channels);
             closeChannels(closed_channels);
             closeSelector();
         }
@@ -267,7 +253,7 @@ public abstract class SimpleChannelDispatcher<T extends Dispatchable> implements
             for (SelectionKey key : selector.keys()) {
                 key.channel().close();
                 key.cancel();
-                // FIXME: Should channels be closed here too?
+                // FIXME: Should open_channels be closed here too?
             }
             this.selector.close();
         } catch (Exception e) {
@@ -287,4 +273,12 @@ public abstract class SimpleChannelDispatcher<T extends Dispatchable> implements
         return (selector == null) ? Selector.open() : Selectors.replaceSelector(selector);
     }
 
+    public static class Defaults {
+        public static int MIN_SPINS = 20;
+        public static int MAX_SPINS = 512;
+        public static long MAX_DELTA_NS = 53416;// 104858;//262144;//524288;
+        public static long DEFAULT_TIMEOUT = 500; // in millis
+        public static long[] TIMEOUTS = {30, 50, 100, 250, 500};// ,1000, 2000, 4000, 10000, 150000};
+        private static final Dispatchable[] DISPATCHABLE_ARRAY = new Dispatchable[0];
+    }
 }

@@ -1,7 +1,7 @@
 package async.nio.dispatchables;
 
 import async.nio.channels.AsyncChannels.CompletionHandler;
-import async.nio.channels.impl.Events.PendingEvent;
+import async.nio.channels.system.Events.PendingEvent;
 
 import java.util.concurrent.Callable;
 

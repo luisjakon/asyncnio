@@ -6,14 +6,14 @@ import async.nio.channels.Exceptions.ReadPendingException;
 import async.nio.channels.Exceptions.WritePendingException;
 import async.nio.channels.impl.AsyncChannelGroup;
 import async.nio.channels.impl.Defaults;
-import async.nio.channels.impl.Events.State;
-import async.nio.channels.impl.Futures.FutureCompletionHandler;
+import async.nio.channels.system.Events.State;
+import async.nio.channels.system.Futures.FutureCompletionHandler;
 import async.nio.dispatchables.DispatchableChannelEvents.PendingChannelEvent;
 import async.nio.dispatchables.DispatchableChannelEvents.PendingConnectEvent;
 import async.nio.dispatchables.DispatchableChannelEvents.PendingIOEvent;
 import async.nio.dispatchables.DispatchableChannels.DispatchableChannel;
 import async.nio.dispatchables.DispatchableChannels.InterestOps;
-import async.nio.dispatchers.Dispatchers.ChannelDispatcher;
+import async.nio.dispatchers.ChannelDispatcher;
 import async.nio.util.Logger;
 
 import java.io.IOException;
@@ -31,12 +31,9 @@ public abstract class DispatchableChannelBase<T extends SelectableChannel> imple
     protected AsyncChannelGroup group;
     protected ChannelDispatcher dispatcher;
 
-    volatile PendingConnectEvent<Void> connect = new PendingConnectEvent<Void>() {
-    };
-    volatile PendingIOEvent<Number> read = new PendingIOEvent<Number>() {
-    };
-    volatile PendingIOEvent<Number> write = new PendingIOEvent<Number>() {
-    };
+    volatile PendingConnectEvent connect;
+    volatile PendingIOEvent read;
+    volatile PendingIOEvent write;
 
     protected volatile int interests;
     protected volatile Boolean shutdown = false;
@@ -44,6 +41,13 @@ public abstract class DispatchableChannelBase<T extends SelectableChannel> imple
     public DispatchableChannelBase(AsyncChannelGroup group, T ch) throws IOException {
         if (ch == null)
             throw new IOException("Invalid or Missing channel: " + ch);
+
+        this.connect = new PendingConnectEvent<Void>() {
+        };
+        this.read = new PendingIOEvent<Number>() {
+        };
+        this.write = new PendingIOEvent<Number>() {
+        };
 
         this.group = (group == null) ? Defaults.defaultGroup() : group;
         this.dispatcher = group.getChannelDispatcher();
@@ -80,6 +84,13 @@ public abstract class DispatchableChannelBase<T extends SelectableChannel> imple
         close(new AsynchronousCloseException());
     }
 
+    protected boolean shouldDispatchConnect() {
+        return false;
+    }
+
+    protected void finishConnect() throws IOException {
+    }
+
     public final void onConnectionReady() {
 
         if (connect.handler != null && connect.handler instanceof FutureCompletionHandler
@@ -101,16 +112,6 @@ public abstract class DispatchableChannelBase<T extends SelectableChannel> imple
         } catch (Exception e) {
             notifyError(connect, e);
         }
-    }
-
-    public final void onConnectionClosed() {
-        AsynchronousCloseException e = new AsynchronousCloseException();
-
-        notifyError(connect, e);
-        notifyError(read, e);
-        notifyError(write, e);
-
-        cleanup();
     }
 
     public final void onReadReady() {
@@ -144,11 +145,14 @@ public abstract class DispatchableChannelBase<T extends SelectableChannel> imple
         }
     }
 
-    protected boolean shouldDispatchConnect() {
-        return false;
-    }
+    public final void onConnectionClosed() {
+        AsynchronousCloseException e = new AsynchronousCloseException();
 
-    protected void finishConnect() throws IOException {
+        notifyError(connect, e);
+        notifyError(read, e);
+        notifyError(write, e);
+
+        cleanup();
     }
 
     protected <V, A> void connect0(Callable<V> function, final A attachment, final CompletionHandler<V, ? super A> handler) {

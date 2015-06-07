@@ -2,10 +2,12 @@ package async.nio.channels.impl;
 
 import async.nio.channels.AsyncChannels.AsynchronousChannelGroup;
 import async.nio.channels.AsyncChannels.AsynchronousChannelProvider;
+import async.nio.channels.system.Notifications;
 import async.nio.dispatchables.DispatchableChannelEvents.PendingChannelEvent;
 import async.nio.dispatchables.DispatchableChannels.DispatchableChannel;
-import async.nio.dispatchers.Dispatchers.ChannelDispatcher;
-import async.nio.dispatchers.Dispatchers.ClientChannelDispatcher;
+import async.nio.dispatchers.ChannelDispatcher;
+import async.nio.dispatchers.ClientChannelDispatcher;
+import async.nio.util.CircularList;
 import async.nio.util.Logger;
 
 import java.io.IOException;
@@ -13,10 +15,7 @@ import java.util.ArrayList;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Level;
 
 public class AsyncChannelGroup extends AsynchronousChannelGroup {
 
@@ -24,7 +23,7 @@ public class AsyncChannelGroup extends AsynchronousChannelGroup {
 
     private ExecutorService notifier;
 
-    private ArrayList<ChannelDispatcher<?>> dispatchers;
+    private CircularList<ChannelDispatcher<?>> dispatchers;
     private ArrayList<DispatchableChannel<?>> channels;
 
     private Timer timer;
@@ -33,7 +32,6 @@ public class AsyncChannelGroup extends AsynchronousChannelGroup {
     protected boolean isSystemGroup = false;
 
     private volatile boolean shutdown;
-    private AtomicInteger current;
 
     private int DISPATCHER_WAKEUP_DELAY_MS = 500;
 
@@ -74,9 +72,7 @@ public class AsyncChannelGroup extends AsynchronousChannelGroup {
     }
 
     public ChannelDispatcher<?> getChannelDispatcher() {
-        int next = current.incrementAndGet() % dispatchers.size();
-        if (next == 0) current.set(0); // cheap counter reset
-        return dispatchers.get(next);
+        return dispatchers.next();
     }
 
     public void schedule(TimerTask timedTask, long timeout, TimeUnit unit) {
@@ -104,11 +100,6 @@ public class AsyncChannelGroup extends AsynchronousChannelGroup {
     }
 
     @Override
-    public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
-        return shutdown0(timeout, unit);
-    }
-
-    @Override
     public void shutdown() {
         shutdown0(1000, TimeUnit.MILLISECONDS);
     }
@@ -116,6 +107,11 @@ public class AsyncChannelGroup extends AsynchronousChannelGroup {
     @Override
     public void shutdownNow() throws IOException {
         shutdown0(0, TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+        return shutdown0(timeout, unit);
     }
 
     protected boolean shutdown0(long timeout, TimeUnit unit) {
@@ -135,24 +131,23 @@ public class AsyncChannelGroup extends AsynchronousChannelGroup {
         return shutdown1(timeout, unit);
     }
 
+    // Called internally
     protected boolean shutdown1(long timeout, TimeUnit unit) {
         teardownTimers();
         teardownChannels();
-        teardownDispatchers();
+        teardownChannelDispatchers();
         return teardownNotificationSystem(timeout, unit);
     }
-
 
     private void setupChannels() {
         this.channels = new ArrayList<DispatchableChannel<?>>();
     }
 
     private void setupChannelDispatchers(int dispatchers) throws IOException {
-        this.dispatchers = new ArrayList<ChannelDispatcher<?>>(dispatchers);
+        this.dispatchers = new CircularList<ChannelDispatcher<?>>(dispatchers);
         for (int i = 0; i < dispatchers; i++) {
             addChannelDispatcher("AsyncChannelDispatcher[" + i + "]: [ ChannelGroup: \"" + this.name + "\" ]");
         }
-        this.current = new AtomicInteger();
     }
 
     private void setupTimers(int delay) {
@@ -187,7 +182,7 @@ public class AsyncChannelGroup extends AsynchronousChannelGroup {
         channels = null;
     }
 
-    private void teardownDispatchers() {
+    private void teardownChannelDispatchers() {
         for (ChannelDispatcher<?> d : dispatchers) {
             d.shutdown();
         }
@@ -228,40 +223,6 @@ public class AsyncChannelGroup extends AsynchronousChannelGroup {
                 public void run() {
                 }
             });
-        }
-    }
-
-    /**
-     * Default ChannelGroup Thread Factory
-     */
-    protected static class ChannelGroupThreadFactory implements ThreadFactory {
-
-        AtomicInteger count = new AtomicInteger();
-        String gid;
-
-        public String name() {
-            return gid;
-        }
-
-        public ChannelGroupThreadFactory setName(String name) {
-            gid = name;
-            return this;
-        }
-
-        @Override
-        public Thread newThread(Runnable r) {
-            Thread t = new Thread(r);
-            t.setName("AsyncChannelGroup[" + gid + "].worker[" + count.getAndIncrement() + "]");
-            t.setDaemon(true);
-            t.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-
-                @Override
-                public void uncaughtException(Thread t, Throwable e) {
-                    e.printStackTrace();
-                    Logger.getLogger(t.getName()).log(Level.WARNING, e.getMessage(), e);
-                }
-            });
-            return t;
         }
     }
 }

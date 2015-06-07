@@ -1,4 +1,4 @@
-package async.nio.channels.impl;
+package async.nio.channels.system;
 
 import async.nio.channels.AsyncChannels.CompletionHandler;
 
@@ -31,13 +31,13 @@ public class Futures {
         }
 
         @Override
-        public final void setException(Throwable t) {
-            super.setException(t);
+        public final void set(Object v) {
+            super.set(v);
         }
 
         @Override
-        public final void set(Object v) {
-            super.set(v);
+        public final void setException(Throwable t) {
+            super.setException(t);
         }
     }
 

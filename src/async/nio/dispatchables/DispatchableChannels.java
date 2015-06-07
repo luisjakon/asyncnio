@@ -14,11 +14,6 @@ public class DispatchableChannels {
         public final static int OP_CLOSE = SelectionKey.OP_ACCEPT << 1;
     }
 
-    public interface Dispatcher<T> {
-
-        boolean registerInterestFor(T channel);
-    }
-
     public interface Dispatchable {
 
         SelectableChannel getSelectableChannel();
@@ -42,7 +37,6 @@ public class DispatchableChannels {
     public interface DispatchableServerChannel<T> extends Dispatchable, Channel {
 
         void onAcceptReady();
-
     }
 
     private DispatchableChannels() {

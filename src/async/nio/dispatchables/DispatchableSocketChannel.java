@@ -3,7 +3,7 @@ package async.nio.dispatchables;
 import async.nio.channels.AsyncChannels.CompletionHandler;
 import async.nio.channels.AsyncChannels.NetworkChannel;
 import async.nio.channels.impl.AsyncChannelGroup;
-import async.nio.channels.impl.Futures.FutureCompletionHandler;
+import async.nio.channels.system.Futures.FutureCompletionHandler;
 import async.nio.net.SocketOption;
 import async.nio.net.SocketOptions;
 import async.nio.net.StandardSocketOptions;

@@ -1,7 +1,5 @@
 package async.nio.channels.impl;
 
-import async.nio.channels.impl.AsyncChannelGroup.ChannelGroupThreadFactory;
-
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,12 +27,12 @@ public class Defaults {
     }
 
     public static ThreadFactory defaultThreadGroupFactory(String name) {
-        return new ChannelGroupThreadFactory().setName(name);
+        return new AsyncThreadFactory(name);
     }
 
     private static ExecutorService defaultNotifierService() {
         return Executors.newFixedThreadPool(Defaults.defaultNotifierThreads(),
-                new ChannelGroupThreadFactory().setName(values[3]));
+                new AsyncThreadFactory(values[3]));
     }
 
     private static int defaultNotifierThreads() {

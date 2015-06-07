@@ -1,9 +1,9 @@
-package async.nio.channels.impl;
+package async.nio.channels.system;
 
 import async.nio.channels.AsyncChannels.CompletionHandler;
 import async.nio.channels.Exceptions.InterruptedByTimeoutException;
-import async.nio.channels.impl.Events.PendingEvent;
-import async.nio.channels.impl.Events.State;
+import async.nio.channels.system.Events.PendingEvent;
+import async.nio.channels.system.Events.State;
 
 public class Notifications {
 
